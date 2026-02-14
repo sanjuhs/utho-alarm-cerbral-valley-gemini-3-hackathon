@@ -1,6 +1,6 @@
 # Utho! — The Alarm That Talks Back
 
-> **Cerebral Valley x Gemini 3 Hackathon** | Built by [jhana.ai](https://jhana.ai) | [MIT License](LICENSE)
+> **Cerebral Valley x Gemini 3 Hackathon** | Built by [jhana.ai 's engineer Sanjay](https://jhana.ai) | [MIT License](LICENSE)
 
 An AI-powered productivity alarm clock that doesn't just wake you up — it **plans your entire day through voice conversations** in English, Hindi, and Kannada, chaining alarms section by section as you move through your routine. Choose between **OpenAI Realtime** and **Gemini 2.5 Flash Native Audio** as your voice backend.
 
@@ -12,13 +12,13 @@ An AI-powered productivity alarm clock that doesn't just wake you up — it **pl
 
 ## Why Utho?
 
-**1.4 billion people** use alarm clocks daily. Every single one has the same experience: ring → snooze → ring → doom scroll. There's zero intelligence between alarms. No one asks *"what are you doing next?"* or nudges you through your morning.
+**1.4 billion people** use alarm clocks daily. Every single one has the same experience: ring → snooze → ring → doom scroll. There's zero intelligence between alarms. No one asks _"what are you doing next?"_ or nudges you through your morning.
 
 Utho turns the humble alarm clock — something **everyone already uses** — into an AI-powered daily routine assistant. It's not another productivity app you forget about. It's your alarm clock, upgraded.
 
 ### The Consumer Insight
 
-Alarm clocks are the most universal app on every phone. By embedding AI *inside* the alarm interaction, we reach users at their most critical decision point: **"What should I do next?"** This is the moment between scrolling Instagram and actually getting things done.
+Alarm clocks are the most universal app on every phone. By embedding AI _inside_ the alarm interaction, we reach users at their most critical decision point: **"What should I do next?"** This is the moment between scrolling Instagram and actually getting things done.
 
 ### Who It's For
 
@@ -44,10 +44,11 @@ Alarm clocks are the most universal app on every phone. By embedding AI *inside*
 </p>
 
 **What you're seeing:**
+
 1. **Home screen** with AI-created alarms ("Done brushing" at 3:02 PM), wallet balance (₿0), and next alarm hero card
 2. **Alarm ringing** with "Talk to Utho!" button — the key interaction that starts a voice session
 3. **Indian Mom persona** listening for what you'll do next
-4. **AI speaking in Hindi** — *"alarm laga diya for brushing... bath lena hai ya kuch aur plan hai?"* — and setting the next alarm automatically
+4. **AI speaking in Hindi** — _"alarm laga diya for brushing... bath lena hai ya kuch aur plan hai?"_ — and setting the next alarm automatically
 5. **Settings** with 4 persona modes, OpenAI/Gemini provider toggle, and voice selection
 6. **API key management** — both OpenAI and Gemini keys stored securely on-device
 
@@ -102,9 +103,9 @@ Every alarm is a **checkpoint**. Every conversation is a **planning session**. Y
 Utho speaks the way you do. The AI **automatically matches your language** and code-switches naturally:
 
 - **English** — default, clean, professional
-- **Hindi** — *"Beta, uth ja! Alarm laga diya brushing ke liye. Paani peelo!"*
-- **Kannada** — *"Yella sari ide, next alarm set maadtini"*
-- **Natural code-mixing** — *"Chalo, theek hai, brush ke baad bath ka plan hai ya kuch aur?"*
+- **Hindi** — _"Beta, uth ja! Alarm laga diya brushing ke liye. Paani peelo!"_
+- **Kannada** — _"Yella sari ide, next alarm set maadtini"_
+- **Natural code-mixing** — _"Chalo, theek hai, brush ke baad bath ka plan hai ya kuch aur?"_
 
 This isn't translation — it's **native-sounding multilingual audio**. The AI persona speaks like a real Indian mom, friend, or boss would. When you switch to Hindi mid-sentence, Utho switches too.
 
@@ -116,12 +117,12 @@ Both OpenAI Realtime and Gemini 2.5 Flash support multilingual audio natively, m
 
 Choose your accountability partner. Each persona has a unique **carrot & stick** approach with Utho Coins (₿):
 
-| Persona | Vibe | Rewards | Penalties |
-|---------|------|---------|-----------|
-| 🫶 **Indian Mom** | Caring + guilt-trippy | +₿25 *"So proud! Making halwa tonight!"* | -₿15 *"Not angry, just disappointed..."* |
-| 🔥 **Best Friend** | Hype + supportive | +₿30 *"You crushed it! Order Swiggy tonight!"* | Never penalizes. Only hype. |
-| 💼 **Boss** | Crisp + ruthless | +₿15 for on-time delivery only | -₿50 *"Time is money. You just lost both."* |
-| 🌙 **Soft** | Gentle + calming | +₿20 *"Proud of you. Take a break."* | -₿5 max, and only if truly procrastinating |
+| Persona            | Vibe                  | Rewards                                        | Penalties                                   |
+| ------------------ | --------------------- | ---------------------------------------------- | ------------------------------------------- |
+| 🫶 **Indian Mom**  | Caring + guilt-trippy | +₿25 _"So proud! Making halwa tonight!"_       | -₿15 _"Not angry, just disappointed..."_    |
+| 🔥 **Best Friend** | Hype + supportive     | +₿30 _"You crushed it! Order Swiggy tonight!"_ | Never penalizes. Only hype.                 |
+| 💼 **Boss**        | Crisp + ruthless      | +₿15 for on-time delivery only                 | -₿50 _"Time is money. You just lost both."_ |
+| 🌙 **Soft**        | Gentle + calming      | +₿20 _"Proud of you. Take a break."_           | -₿5 max, and only if truly procrastinating  |
 
 ### Utho Coins (₿) — Gamified Productivity
 
@@ -129,7 +130,7 @@ A fake in-app currency that makes productivity tangible:
 
 - **Boss** runs a tight ship — penalizes missed deadlines, plan changes, and procrastination. Rewards are modest and earned.
 - **Best Friend** is all carrot, no stick. Celebrates every win, suggests spending rewards on treats.
-- **Indian Mom** uses guilt as the ultimate motivator. Rewards come with love (*"Making your favorite halwa tonight!"*).
+- **Indian Mom** uses guilt as the ultimate motivator. Rewards come with love (_"Making your favorite halwa tonight!"_).
 - **Soft** barely penalizes. Gentle rewards and self-care reminders.
 
 The wallet balance persists across sessions and is visible on the home screen and during voice sessions. Full transaction history in the Activity Log.
@@ -140,10 +141,10 @@ The wallet balance persists across sessions and is visible on the home screen an
 
 Switch between OpenAI and Gemini in Settings — same tools, same personas, same experience.
 
-| Provider | Transport | Model | How Audio Works |
-|----------|-----------|-------|-----------------|
-| **OpenAI** | WebRTC (SDP exchange) | gpt-4o-realtime-preview | Opus codec, bidirectional audio via WebRTC peer connection |
-| **Gemini** | WebSocket (BidiGenerateContent) | gemini-2.5-flash-native-audio-dialog | PCM 16kHz mono streaming via `record` package + WebSocket |
+| Provider   | Transport                       | Model                                | How Audio Works                                            |
+| ---------- | ------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| **OpenAI** | WebRTC (SDP exchange)           | gpt-4o-realtime-preview              | Opus codec, bidirectional audio via WebRTC peer connection |
+| **Gemini** | WebSocket (BidiGenerateContent) | gemini-2.5-flash-native-audio-dialog | PCM 16kHz mono streaming via `record` package + WebSocket  |
 
 Both providers use **identical tool definitions** and system prompts (shared via `BaseVoiceService`). The `VoiceSessionScreen` is provider-agnostic — it just listens to `transcriptStream` and `toolCallStream`.
 
@@ -200,16 +201,16 @@ BaseVoiceService (abstract — shared prompt, tools, streams)
 
 ### Key Technical Decisions
 
-| Decision | Why |
-|----------|-----|
-| **`android_alarm_manager_plus`** over `zonedSchedule` | `zonedSchedule` silently fails on Android 14+/16 (Nothing OS). Background isolate + `show()` is reliable. |
-| **Top-level `@pragma('vm:entry-point')` callback** | Required by `android_alarm_manager_plus` for background isolate invocation. |
-| **DataChannel open wait** | Session.update (with tools) sent only after WebRTC data channel opens — prevents silent tool drops. |
-| **`BaseVoiceService` abstraction** | Both OpenAI and Gemini implement the same interface. Screen is provider-agnostic. |
-| **`record` package for Gemini mic** | Gemini Live needs raw PCM over WebSocket. `flutter_webrtc` can't stream raw PCM on mobile. `record` provides `startStream()` for 16kHz mono. |
-| **Per-persona gamification** | Reward/penalty behavior baked into system prompt per persona. Boss penalizes hard, Friend never penalizes. |
-| **BYOK (Bring Your Own Key)** | No backend — API keys in Android Keystore via `flutter_secure_storage`. |
-| **Tool call deduplication** | OpenAI sends tool calls via both `response.function_call_arguments.done` AND `response.output_item.done`. Dedup via `_handledCallIds` set. |
+| Decision                                              | Why                                                                                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`android_alarm_manager_plus`** over `zonedSchedule` | `zonedSchedule` silently fails on Android 14+/16 (Nothing OS). Background isolate + `show()` is reliable.                                    |
+| **Top-level `@pragma('vm:entry-point')` callback**    | Required by `android_alarm_manager_plus` for background isolate invocation.                                                                  |
+| **DataChannel open wait**                             | Session.update (with tools) sent only after WebRTC data channel opens — prevents silent tool drops.                                          |
+| **`BaseVoiceService` abstraction**                    | Both OpenAI and Gemini implement the same interface. Screen is provider-agnostic.                                                            |
+| **`record` package for Gemini mic**                   | Gemini Live needs raw PCM over WebSocket. `flutter_webrtc` can't stream raw PCM on mobile. `record` provides `startStream()` for 16kHz mono. |
+| **Per-persona gamification**                          | Reward/penalty behavior baked into system prompt per persona. Boss penalizes hard, Friend never penalizes.                                   |
+| **BYOK (Bring Your Own Key)**                         | No backend — API keys in Android Keystore via `flutter_secure_storage`.                                                                      |
+| **Tool call deduplication**                           | OpenAI sends tool calls via both `response.function_call_arguments.done` AND `response.output_item.done`. Dedup via `_handledCallIds` set.   |
 
 ---
 
@@ -217,17 +218,17 @@ BaseVoiceService (abstract — shared prompt, tools, streams)
 
 The voice AI has access to 9 tools during every conversation:
 
-| Tool | What it does | When the AI uses it |
-|------|-------------|-------------------|
-| `create_alarm` | Set alarm at absolute time | "Set alarm for 7:30" |
-| `create_alarm_relative` | Set alarm N minutes from now | "Remind me in 10 minutes" |
-| `delete_alarm` | Delete alarm by label (fuzzy match) | "Cancel the brushing alarm" |
-| `list_alarms` | Check existing alarms | Before creating, to avoid duplicates |
-| `create_reminder` | One-shot notification | "Remind me to take medicine" |
-| `add_task` | Add to today's focus list | "Add 'review PR' to my tasks" |
-| `list_todays_tasks` | Read back tasks | "What do I have today?" |
-| `reward_user` | Award Utho Coins | User completes task on time |
-| `penalize_user` | Deduct Utho Coins | User misses deadline, changes plans |
+| Tool                    | What it does                        | When the AI uses it                  |
+| ----------------------- | ----------------------------------- | ------------------------------------ |
+| `create_alarm`          | Set alarm at absolute time          | "Set alarm for 7:30"                 |
+| `create_alarm_relative` | Set alarm N minutes from now        | "Remind me in 10 minutes"            |
+| `delete_alarm`          | Delete alarm by label (fuzzy match) | "Cancel the brushing alarm"          |
+| `list_alarms`           | Check existing alarms               | Before creating, to avoid duplicates |
+| `create_reminder`       | One-shot notification               | "Remind me to take medicine"         |
+| `add_task`              | Add to today's focus list           | "Add 'review PR' to my tasks"        |
+| `list_todays_tasks`     | Read back tasks                     | "What do I have today?"              |
+| `reward_user`           | Award Utho Coins                    | User completes task on time          |
+| `penalize_user`         | Deduct Utho Coins                   | User misses deadline, changes plans  |
 
 ---
 
@@ -249,12 +250,14 @@ flutter run
 API keys are stored in secure storage (Android Keystore). Never bundled in builds. `.env` is gitignored.
 
 ### Physical Device
+
 ```bash
 adb devices              # verify USB debugging enabled
 flutter run -d <device>
 ```
 
 ### Building
+
 ```bash
 flutter build apk --release            # sideload APK
 flutter build appbundle --release       # Play Store AAB
@@ -297,25 +300,30 @@ lib/
 ## How It Helps People
 
 ### Morning Routine Automation
-Instead of 5 separate alarms with no context, set one wake-up alarm and let Utho chain the rest through conversation. *"I'll brush" → 10 min alarm → "Bath next" → 25 min alarm → "Time to code" → 60 min alarm.*
+
+Instead of 5 separate alarms with no context, set one wake-up alarm and let Utho chain the rest through conversation. _"I'll brush" → 10 min alarm → "Bath next" → 25 min alarm → "Time to code" → 60 min alarm._
 
 ### Accountability Without Another App
-Your alarm clock is already on your phone. Utho adds accountability *inside* the alarm interaction — no new habits to build, no new app to remember to open.
+
+Your alarm clock is already on your phone. Utho adds accountability _inside_ the alarm interaction — no new habits to build, no new app to remember to open.
 
 ### Multilingual Accessibility
+
 For India's 1.4 billion people who switch between English, Hindi, and regional languages naturally, Utho speaks the way they do. No awkward English-only interfaces.
 
 ### Emotional Intelligence
+
 Different days need different energy. Pick Boss when you need to crush deadlines. Pick Soft when you're having a low day. Pick Indian Mom when you need love and guilt in equal measure.
 
 ### Gamified Motivation
-The Utho Coins system turns abstract productivity into tangible progress. Boss mode makes procrastination *expensive*. Friend mode makes every win feel like a celebration.
+
+The Utho Coins system turns abstract productivity into tangible progress. Boss mode makes procrastination _expensive_. Friend mode makes every win feel like a celebration.
 
 ---
 
 ## Team
 
-Built at **Cerebral Valley x Gemini 3 Hackathon** by [jhana.ai](https://jhana.ai)
+Built at **Cerebral Valley x Gemini 3 Hackathon** by [jhana.ai 's engineer Sanjay](https://jhana.ai)
 
 ## License
 
