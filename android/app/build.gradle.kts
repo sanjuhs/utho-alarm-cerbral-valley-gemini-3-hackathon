@@ -32,6 +32,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Separate app ID so debug installs side-by-side with release
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Utho! Dev")
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

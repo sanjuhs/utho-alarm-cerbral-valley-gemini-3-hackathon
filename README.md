@@ -8,6 +8,12 @@ An AI-powered productivity alarm clock that doesn't just wake you up — it **pl
   <img src="assets/images/image.png" width="200" alt="Utho! Logo">
 </p>
 
+### Demo Video
+
+[![Utho! Demo](https://img.youtube.com/vi/OGpg7h_NrDs/maxresdefault.jpg)](https://youtu.be/OGpg7h_NrDs)
+
+**[Watch the full demo on YouTube](https://youtu.be/OGpg7h_NrDs)**
+
 ---
 
 ## Why Utho?
