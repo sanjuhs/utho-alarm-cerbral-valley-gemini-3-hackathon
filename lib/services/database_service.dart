@@ -17,7 +17,7 @@ class DatabaseService {
     final path = p.join(await getDatabasesPath(), 'utho.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE alarms (
@@ -57,8 +57,26 @@ class DatabaseService {
             value TEXT NOT NULL
           )
         ''');
+        await _createHistoryTable(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createHistoryTable(db);
+        }
       },
     );
+  }
+
+  static Future<void> _createHistoryTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS alarm_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        label TEXT NOT NULL,
+        alarm_time INTEGER,
+        created_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   // ── Alarms ──
@@ -114,6 +132,23 @@ class DatabaseService {
     return (await (await db).query('sessions', orderBy: 'date DESC', limit: limit))
         .map(Session.fromMap)
         .toList();
+  }
+
+  // ── Alarm History ──
+  static Future<void> logAlarmAction(
+      String action, String label, DateTime alarmTime) async {
+    await (await db).insert('alarm_history', {
+      'action': action,
+      'label': label,
+      'alarm_time': alarmTime.millisecondsSinceEpoch,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getAlarmHistory(
+      {int limit = 50}) async {
+    return (await db).query('alarm_history',
+        orderBy: 'created_at DESC', limit: limit);
   }
 
   // ── Preferences ──

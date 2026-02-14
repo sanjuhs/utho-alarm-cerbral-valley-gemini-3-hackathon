@@ -8,6 +8,7 @@ import '../utils/formatters.dart';
 import '../widgets/alarm_card.dart';
 import '../widgets/task_chip.dart';
 import 'alarm_editor_screen.dart';
+import 'alarm_history_screen.dart';
 import 'settings_screen.dart';
 import 'voice_session_screen.dart';
 
@@ -71,9 +72,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.settings_rounded, color: UthoTheme.textSecondary),
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                      icon: const Icon(Icons.history_rounded,
+                          color: UthoTheme.textSecondary),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const AlarmHistoryScreen())),
+                      tooltip: 'Alarm History',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_rounded,
+                          color: UthoTheme.textSecondary),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const SettingsScreen())),
                     ),
                   ],
                 ),

@@ -6,14 +6,21 @@ import '../models/alarm.dart';
 import '../providers/alarm_provider.dart';
 import '../providers/task_provider.dart';
 import '../providers/preferences_provider.dart';
+import '../services/database_service.dart';
 import '../services/voice_service.dart';
 import '../utils/theme.dart';
 
-class VoiceSessionScreen extends StatefulWidget {
-  /// If non-null, the alarm that triggered this session (ringing screen → talk).
-  /// The AI gets full context about which alarm fired and manages follow-ups.
-  final Alarm? triggeringAlarm;
+/// Represents a single action taken by the AI during the session.
+class _ActionEntry {
+  final IconData icon;
+  final Color color;
+  final String text;
+  final DateTime time;
+  _ActionEntry(this.icon, this.color, this.text) : time = DateTime.now();
+}
 
+class VoiceSessionScreen extends StatefulWidget {
+  final Alarm? triggeringAlarm;
   const VoiceSessionScreen({super.key, this.triggeringAlarm});
 
   @override
@@ -24,11 +31,16 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
     with SingleTickerProviderStateMixin {
   final VoiceService _voice = VoiceService();
   final _transcript = StringBuffer();
+  final _actions = <_ActionEntry>[];
   String _status = 'Connecting...';
   bool _connected = false;
   late final AnimationController _waveController;
   StreamSubscription? _transcriptSub;
   StreamSubscription? _toolCallSub;
+
+  void _addAction(IconData icon, Color color, String text) {
+    setState(() => _actions.add(_ActionEntry(icon, color, text)));
+  }
 
   @override
   void initState() {
@@ -51,38 +63,36 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
       return;
     }
 
-    // Build rich context for the AI
     final contextBuf = StringBuffer();
-
-    // Triggering alarm context
     final trigger = widget.triggeringAlarm;
     if (trigger != null) {
       contextBuf.writeln('THIS SESSION WAS TRIGGERED BY ALARM:');
-      contextBuf.writeln('  Label: "${trigger.label.isNotEmpty ? trigger.label : "Wake up"}"');
-      contextBuf.writeln('  Scheduled for: ${trigger.time.hour}:${trigger.time.minute.toString().padLeft(2, '0')}');
+      contextBuf.writeln(
+          '  Label: "${trigger.label.isNotEmpty ? trigger.label : "Wake up"}"');
+      contextBuf.writeln(
+          '  Scheduled for: ${trigger.time.hour}:${trigger.time.minute.toString().padLeft(2, '0')}');
       if (trigger.focusLabel != null) {
         contextBuf.writeln('  Focus: ${trigger.focusLabel}');
       }
       contextBuf.writeln('');
     }
 
-    // All existing alarms (so AI knows what's already set)
     final enabledAlarms = alarmProv.alarms.where((a) => a.enabled).toList();
     if (enabledAlarms.isNotEmpty) {
       contextBuf.writeln('ALL CURRENTLY SET ALARMS:');
       for (final a in enabledAlarms) {
         final label = a.label.isNotEmpty ? a.label : 'Alarm';
-        final t = '${a.time.hour}:${a.time.minute.toString().padLeft(2, '0')}';
-        final ft = '${a.nextFireTime.hour}:${a.nextFireTime.minute.toString().padLeft(2, '0')}';
-        contextBuf.writeln('  - "$label" at $t (next fires: $ft) [id: ${a.id}]');
+        final t =
+            '${a.time.hour}:${a.time.minute.toString().padLeft(2, '0')}';
+        final ft =
+            '${a.nextFireTime.hour}:${a.nextFireTime.minute.toString().padLeft(2, '0')}';
+        contextBuf
+            .writeln('  - "$label" at $t (next fires: $ft) [id: ${a.id}]');
       }
       contextBuf.writeln('');
     } else {
-      contextBuf.writeln('NO ALARMS CURRENTLY SET.');
-      contextBuf.writeln('');
+      contextBuf.writeln('NO ALARMS CURRENTLY SET.\n');
     }
-
-    // Tasks
     contextBuf.writeln('Tasks: ${tasks.todaySummary}');
 
     _transcriptSub = _voice.transcriptStream.listen((delta) {
@@ -129,11 +139,35 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
           label: args['label'] as String? ?? '',
           repeatDays: (args['repeat_days'] as List?)?.cast<int>() ?? [],
         );
+        final ft =
+            '${alarm.nextFireTime.hour}:${alarm.nextFireTime.minute.toString().padLeft(2, '0')}';
+        _addAction(Icons.alarm_add_rounded, UthoTheme.accent,
+            '⏰ Alarm set: "${alarm.label}" at $ft');
+        await DatabaseService.logAlarmAction(
+            'created', alarm.label, alarm.nextFireTime);
+        result = {'status': 'ok', 'alarm_id': alarm.id, 'fires_at': ft};
+        break;
+
+      case 'create_alarm_relative':
+        final minutesFromNow = args['minutes_from_now'] as int;
+        final futureTime =
+            DateTime.now().add(Duration(minutes: minutesFromNow));
+        final relAlarm = await alarmProv.addAlarm(
+          hour: futureTime.hour,
+          minute: futureTime.minute,
+          label: args['label'] as String? ?? '',
+        );
+        final ft =
+            '${futureTime.hour}:${futureTime.minute.toString().padLeft(2, '0')}';
+        _addAction(Icons.timer_rounded, UthoTheme.accent,
+            '⏰ Alarm in ${minutesFromNow}m: "${relAlarm.label}" at $ft');
+        await DatabaseService.logAlarmAction(
+            'created', relAlarm.label, futureTime);
         result = {
           'status': 'ok',
-          'alarm_id': alarm.id,
-          'fires_at':
-              '${alarm.nextFireTime.hour}:${alarm.nextFireTime.minute.toString().padLeft(2, '0')}',
+          'alarm_id': relAlarm.id,
+          'fires_at': ft,
+          'minutes_from_now': minutesFromNow
         };
         break;
 
@@ -141,7 +175,6 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         final targetLabel = (args['label'] as String?)?.toLowerCase() ?? '';
         final targetId = args['alarm_id'] as String?;
         final alarms = alarmProv.alarms;
-        // Find by exact ID or fuzzy label match
         final match = alarms.cast<dynamic>().firstWhere(
               (a) =>
                   (targetId != null && a.id == targetId) ||
@@ -151,6 +184,10 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
             );
         if (match != null) {
           await alarmProv.removeAlarm(match.id);
+          _addAction(Icons.alarm_off_rounded, UthoTheme.danger,
+              '🗑 Deleted: "${match.label}"');
+          await DatabaseService.logAlarmAction(
+              'deleted', match.label, DateTime.now());
           result = {'status': 'ok', 'deleted_label': match.label};
         } else {
           result = {
@@ -176,29 +213,16 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         };
         break;
 
-      case 'create_alarm_relative':
-        final minutesFromNow = args['minutes_from_now'] as int;
-        final futureTime = DateTime.now().add(Duration(minutes: minutesFromNow));
-        final relAlarm = await alarmProv.addAlarm(
-          hour: futureTime.hour,
-          minute: futureTime.minute,
-          label: args['label'] as String? ?? '',
-        );
-        result = {
-          'status': 'ok',
-          'alarm_id': relAlarm.id,
-          'fires_at':
-              '${futureTime.hour}:${futureTime.minute.toString().padLeft(2, '0')}',
-          'minutes_from_now': minutesFromNow,
-        };
-        break;
-
       case 'create_reminder':
         final alarm = await alarmProv.addAlarm(
           hour: args['hour'] as int,
           minute: args['minute'] as int,
           label: args['text'] as String? ?? 'Reminder',
         );
+        _addAction(Icons.notifications_active_rounded, UthoTheme.accent,
+            '🔔 Reminder: "${alarm.label}"');
+        await DatabaseService.logAlarmAction(
+            'created', alarm.label, alarm.nextFireTime);
         result = {'status': 'ok', 'reminder_id': alarm.id};
         break;
 
@@ -214,6 +238,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
           priority: args['priority'] as int? ?? 2,
           dueTime: due,
         );
+        _addAction(Icons.check_circle_outline_rounded, UthoTheme.accent,
+            '✅ Task: "${task.title}"');
         result = {'status': 'ok', 'task_id': task.id};
         break;
 
@@ -254,9 +280,42 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
       ),
       body: Column(
         children: [
+          // ── Actions strip (shows alarm creates/deletes in real-time) ──
+          if (_actions.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final action in _actions)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(action.icon, size: 16, color: action.color),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              action.text,
+                              style: TextStyle(
+                                color: action.color,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
           const Spacer(),
 
-          // Animated wave / orb
+          // Animated orb
           AnimatedBuilder(
             animation: _waveController,
             builder: (_, __) {
@@ -267,8 +326,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      UthoTheme.accent
-                          .withAlpha(_connected ? 200 : 60),
+                      UthoTheme.accent.withAlpha(_connected ? 200 : 60),
                       UthoTheme.accent.withAlpha(40),
                       Colors.transparent,
                     ],
@@ -289,12 +347,12 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
           ),
           const SizedBox(height: 24),
 
-          // Status
           Text(
             _status,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: UthoTheme.textSecondary,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: UthoTheme.textSecondary),
           ),
           const SizedBox(height: 32),
 
@@ -328,7 +386,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
           ),
           const SizedBox(height: 16),
 
-          // End session button
+          // End session
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
             child: SizedBox(
