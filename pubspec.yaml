@@ -31,6 +31,10 @@ dependencies:
   http: ^1.3.0
   # WebRTC for OpenAI Realtime
   flutter_webrtc: ^0.12.8
+  # WebSocket for Gemini Live
+  web_socket_channel: ^3.0.1
+  # Audio recording (PCM stream for Gemini)
+  record: ^6.0.0
   # JSON
   json_annotation: ^4.9.0
   # Permission handling

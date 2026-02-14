@@ -17,7 +17,7 @@ class DatabaseService {
     final path = p.join(await getDatabasesPath(), 'utho.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE alarms (
@@ -58,10 +58,17 @@ class DatabaseService {
           )
         ''');
         await _createHistoryTable(db);
+        await _createWalletTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createHistoryTable(db);
+        }
+        if (oldVersion < 3) {
+          await _createWalletTable(db);
+          // Add new columns to alarm_history if they're missing
+          try { await db.execute('ALTER TABLE alarm_history ADD COLUMN session_id TEXT'); } catch (_) {}
+          try { await db.execute('ALTER TABLE alarm_history ADD COLUMN persona TEXT'); } catch (_) {}
         }
       },
     );
@@ -74,6 +81,8 @@ class DatabaseService {
         action TEXT NOT NULL,
         label TEXT NOT NULL,
         alarm_time INTEGER,
+        session_id TEXT,
+        persona TEXT,
         created_at INTEGER NOT NULL
       )
     ''');
@@ -134,13 +143,51 @@ class DatabaseService {
         .toList();
   }
 
+  // ── Wallet / Gamification ──
+  static Future<void> _createWalletTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS wallet (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        persona TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  static Future<int> getWalletBalance() async {
+    final rows = await (await db)
+        .rawQuery('SELECT COALESCE(SUM(amount), 0) as total FROM wallet');
+    return (rows.first['total'] as int?) ?? 0;
+  }
+
+  static Future<void> addWalletTransaction(
+      int amount, String reason, String persona) async {
+    await (await db).insert('wallet', {
+      'amount': amount,
+      'reason': reason,
+      'persona': persona,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getWalletHistory(
+      {int limit = 50}) async {
+    return (await db)
+        .query('wallet', orderBy: 'created_at DESC', limit: limit);
+  }
+
   // ── Alarm History ──
   static Future<void> logAlarmAction(
-      String action, String label, DateTime alarmTime) async {
+      String action, String label, DateTime alarmTime,
+      {String? sessionId, String? persona}) async {
     await (await db).insert('alarm_history', {
       'action': action,
       'label': label,
       'alarm_time': alarmTime.millisecondsSinceEpoch,
+      'session_id': sessionId,
+      'persona': persona,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
   }

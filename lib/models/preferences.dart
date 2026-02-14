@@ -15,17 +15,32 @@ enum AssistantMode {
       AssistantMode.values.firstWhere((m) => m.key == key, orElse: () => bestFriend);
 }
 
+enum AIProvider {
+  openai('openai', 'OpenAI', 'gpt-4o-realtime via WebRTC'),
+  gemini('gemini', 'Gemini', 'Gemini 2.5 Flash Native Audio via WebSocket');
+
+  final String key;
+  final String displayName;
+  final String description;
+  const AIProvider(this.key, this.displayName, this.description);
+
+  static AIProvider fromKey(String key) =>
+      AIProvider.values.firstWhere((p) => p.key == key, orElse: () => openai);
+}
+
 class UserPreferences {
   final AssistantMode mode;
   final String voiceStyle;
   final int defaultReminderCadenceMinutes;
   final bool useBYOK;
+  final AIProvider aiProvider;
 
   const UserPreferences({
     this.mode = AssistantMode.bestFriend,
     this.voiceStyle = 'alloy',
     this.defaultReminderCadenceMinutes = 30,
     this.useBYOK = false,
+    this.aiProvider = AIProvider.openai,
   });
 
   UserPreferences copyWith({
@@ -33,6 +48,7 @@ class UserPreferences {
     String? voiceStyle,
     int? defaultReminderCadenceMinutes,
     bool? useBYOK,
+    AIProvider? aiProvider,
   }) =>
       UserPreferences(
         mode: mode ?? this.mode,
@@ -40,6 +56,7 @@ class UserPreferences {
         defaultReminderCadenceMinutes:
             defaultReminderCadenceMinutes ?? this.defaultReminderCadenceMinutes,
         useBYOK: useBYOK ?? this.useBYOK,
+        aiProvider: aiProvider ?? this.aiProvider,
       );
 
   Map<String, dynamic> toMap() => {
@@ -47,6 +64,7 @@ class UserPreferences {
         'voice_style': voiceStyle,
         'default_reminder_cadence_minutes': defaultReminderCadenceMinutes,
         'use_byok': useBYOK ? 1 : 0,
+        'ai_provider': aiProvider.key,
       };
 
   factory UserPreferences.fromMap(Map<String, dynamic> m) => UserPreferences(
@@ -55,5 +73,6 @@ class UserPreferences {
         defaultReminderCadenceMinutes:
             m['default_reminder_cadence_minutes'] as int? ?? 30,
         useBYOK: (m['use_byok'] as int?) == 1,
+        aiProvider: AIProvider.fromKey(m['ai_provider'] as String? ?? 'openai'),
       );
 }

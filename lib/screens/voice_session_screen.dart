@@ -2,11 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../models/alarm.dart';
 import '../providers/alarm_provider.dart';
 import '../providers/task_provider.dart';
+import '../models/preferences.dart';
 import '../providers/preferences_provider.dart';
+import '../services/base_voice_service.dart';
 import '../services/database_service.dart';
+import '../services/gemini_voice_service.dart';
 import '../services/voice_service.dart';
 import '../utils/theme.dart';
 
@@ -29,11 +33,13 @@ class VoiceSessionScreen extends StatefulWidget {
 
 class _VoiceSessionScreenState extends State<VoiceSessionScreen>
     with SingleTickerProviderStateMixin {
-  final VoiceService _voice = VoiceService();
+  late final BaseVoiceService _voice;
   final _transcript = StringBuffer();
   final _actions = <_ActionEntry>[];
+  final _sessionId = const Uuid().v4();
   String _status = 'Connecting...';
   bool _connected = false;
+  int _walletBalance = 0;
   late final AnimationController _waveController;
   StreamSubscription? _transcriptSub;
   StreamSubscription? _toolCallSub;
@@ -45,6 +51,10 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
   @override
   void initState() {
     super.initState();
+    final prefs = context.read<PreferencesProvider>();
+    _voice = prefs.prefs.aiProvider == AIProvider.gemini
+        ? GeminiVoiceService()
+        : VoiceService();
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2000),
@@ -62,6 +72,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
       setState(() => _status = 'Microphone permission required for voice.');
       return;
     }
+
+    _walletBalance = await DatabaseService.getWalletBalance();
 
     final contextBuf = StringBuffer();
     final trigger = widget.triggeringAlarm;
@@ -94,6 +106,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
       contextBuf.writeln('NO ALARMS CURRENTLY SET.\n');
     }
     contextBuf.writeln('Tasks: ${tasks.todaySummary}');
+    contextBuf.writeln('');
+    contextBuf.writeln('WALLET BALANCE: $_walletBalance Utho Coins');
 
     _transcriptSub = _voice.transcriptStream.listen((delta) {
       setState(() => _transcript.write(delta));
@@ -101,9 +115,10 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
     _toolCallSub = _voice.toolCallStream.listen(_handleToolCall);
 
     try {
-      final apiKey = prefs.apiKey;
+      final apiKey = prefs.activeApiKey;
       if (apiKey == null || apiKey.isEmpty) {
-        setState(() => _status = 'No API key set. Go to Settings to add one.');
+        final provider = prefs.prefs.aiProvider.displayName;
+        setState(() => _status = 'No $provider API key set. Go to Settings.');
         return;
       }
 
@@ -122,10 +137,14 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
     }
   }
 
+  String get _persona => context.read<PreferencesProvider>().prefs.mode.key;
+
   void _handleToolCall(Map<String, dynamic> call) async {
     final name = call['name'] as String;
     final args = call['arguments'] as Map<String, dynamic>;
     final callId = call['call_id'] as String;
+
+    debugPrint('[Utho] Handling tool call: $name args=$args');
 
     dynamic result;
     final alarmProv = context.read<AlarmProvider>();
@@ -144,7 +163,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         _addAction(Icons.alarm_add_rounded, UthoTheme.accent,
             '⏰ Alarm set: "${alarm.label}" at $ft');
         await DatabaseService.logAlarmAction(
-            'created', alarm.label, alarm.nextFireTime);
+            'created', alarm.label, alarm.nextFireTime,
+            sessionId: _sessionId, persona: _persona);
         result = {'status': 'ok', 'alarm_id': alarm.id, 'fires_at': ft};
         break;
 
@@ -162,7 +182,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         _addAction(Icons.timer_rounded, UthoTheme.accent,
             '⏰ Alarm in ${minutesFromNow}m: "${relAlarm.label}" at $ft');
         await DatabaseService.logAlarmAction(
-            'created', relAlarm.label, futureTime);
+            'created', relAlarm.label, futureTime,
+            sessionId: _sessionId, persona: _persona);
         result = {
           'status': 'ok',
           'alarm_id': relAlarm.id,
@@ -175,19 +196,18 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         final targetLabel = (args['label'] as String?)?.toLowerCase() ?? '';
         final targetId = args['alarm_id'] as String?;
         final alarms = alarmProv.alarms;
-        final match = alarms.cast<dynamic>().firstWhere(
-              (a) =>
-                  (targetId != null && a.id == targetId) ||
-                  (targetLabel.isNotEmpty &&
-                      a.label.toLowerCase().contains(targetLabel)),
-              orElse: () => null,
-            );
+        Alarm? match;
+        for (final a in alarms) {
+          if (targetId != null && a.id == targetId) { match = a; break; }
+          if (targetLabel.isNotEmpty && a.label.toLowerCase().contains(targetLabel)) { match = a; break; }
+        }
         if (match != null) {
           await alarmProv.removeAlarm(match.id);
           _addAction(Icons.alarm_off_rounded, UthoTheme.danger,
               '🗑 Deleted: "${match.label}"');
           await DatabaseService.logAlarmAction(
-              'deleted', match.label, DateTime.now());
+              'deleted', match.label, DateTime.now(),
+              sessionId: _sessionId, persona: _persona);
           result = {'status': 'ok', 'deleted_label': match.label};
         } else {
           result = {
@@ -222,7 +242,8 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         _addAction(Icons.notifications_active_rounded, UthoTheme.accent,
             '🔔 Reminder: "${alarm.label}"');
         await DatabaseService.logAlarmAction(
-            'created', alarm.label, alarm.nextFireTime);
+            'created', alarm.label, alarm.nextFireTime,
+            sessionId: _sessionId, persona: _persona);
         result = {'status': 'ok', 'reminder_id': alarm.id};
         break;
 
@@ -251,6 +272,32 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         };
         break;
 
+      case 'reward_user':
+        final amount = args['amount'] as int;
+        final reason = args['reason'] as String;
+        await DatabaseService.addWalletTransaction(amount, reason, _persona);
+        _walletBalance += amount;
+        _addAction(Icons.star_rounded, const Color(0xFFFFD700),
+            '+₿$amount: $reason');
+        await DatabaseService.logAlarmAction(
+            'reward', '+$amount coins: $reason', DateTime.now(),
+            sessionId: _sessionId, persona: _persona);
+        result = {'status': 'ok', 'new_balance': _walletBalance};
+        break;
+
+      case 'penalize_user':
+        final amount = args['amount'] as int;
+        final reason = args['reason'] as String;
+        await DatabaseService.addWalletTransaction(-amount, reason, _persona);
+        _walletBalance -= amount;
+        _addAction(Icons.money_off_rounded, UthoTheme.danger,
+            '-₿$amount: $reason');
+        await DatabaseService.logAlarmAction(
+            'penalty', '-$amount coins: $reason', DateTime.now(),
+            sessionId: _sessionId, persona: _persona);
+        result = {'status': 'ok', 'new_balance': _walletBalance};
+        break;
+
       default:
         result = {'error': 'Unknown tool: $name'};
     }
@@ -272,11 +319,47 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
     return Scaffold(
       backgroundColor: UthoTheme.surface,
       appBar: AppBar(
-        title: const Text('Utho! is listening'),
+        title: Consumer<PreferencesProvider>(
+          builder: (_, p, __) => Text(
+            'Utho! (${p.prefs.aiProvider.displayName})',
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _walletBalance >= 0
+                  ? const Color(0xFFFFD700).withAlpha(30)
+                  : UthoTheme.danger.withAlpha(30),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.toll_rounded, size: 16,
+                    color: _walletBalance >= 0
+                        ? const Color(0xFFFFD700)
+                        : UthoTheme.danger),
+                const SizedBox(width: 4),
+                Text(
+                  '₿$_walletBalance',
+                  style: TextStyle(
+                    color: _walletBalance >= 0
+                        ? const Color(0xFFFFD700)
+                        : UthoTheme.danger,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

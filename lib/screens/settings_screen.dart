@@ -29,34 +29,110 @@ class SettingsScreen extends StatelessWidget {
                 )),
             const SizedBox(height: 28),
 
-            // ── Voice Style ──
-            Text('Voice',
+            // ── AI Provider ──
+            Text('AI Provider',
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
-                  .map((v) => ChoiceChip(
-                        label: Text(v),
-                        selected: prefs.prefs.voiceStyle == v,
-                        onSelected: (_) => prefs.setVoiceStyle(v),
-                        selectedColor: UthoTheme.accent,
-                        labelStyle: TextStyle(
-                          color: prefs.prefs.voiceStyle == v
-                              ? Colors.white
-                              : UthoTheme.textSecondary,
+            ...AIProvider.values.map((p) => GestureDetector(
+                  onTap: () => prefs.setAIProvider(p),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: prefs.prefs.aiProvider == p
+                          ? UthoTheme.accent.withAlpha(25)
+                          : UthoTheme.surfaceCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: prefs.prefs.aiProvider == p
+                            ? UthoTheme.accent
+                            : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: p == AIProvider.openai
+                                ? const Color(0xFF10A37F).withAlpha(30)
+                                : const Color(0xFF4285F4).withAlpha(30),
+                          ),
+                          child: Center(
+                            child: Text(
+                              p == AIProvider.openai ? 'O' : 'G',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: p == AIProvider.openai
+                                    ? const Color(0xFF10A37F)
+                                    : const Color(0xFF4285F4),
+                              ),
+                            ),
+                          ),
                         ),
-                        backgroundColor: UthoTheme.surfaceCard,
-                        side: BorderSide.none,
-                      ))
-                  .toList(),
-            ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(p.displayName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: prefs.prefs.aiProvider == p
+                                        ? UthoTheme.accent
+                                        : UthoTheme.textPrimary,
+                                  )),
+                              Text(p.description,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: UthoTheme.textSecondary)),
+                            ],
+                          ),
+                        ),
+                        if (prefs.prefs.aiProvider == p)
+                          const Icon(Icons.check_circle, color: UthoTheme.accent, size: 20),
+                      ],
+                    ),
+                  ),
+                )),
             const SizedBox(height: 28),
 
-            // ── API Key ──
+            // ── Voice Style (OpenAI only) ──
+            if (prefs.prefs.aiProvider == AIProvider.openai) ...[
+              Text('Voice',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
+                    .map((v) => ChoiceChip(
+                          label: Text(v),
+                          selected: prefs.prefs.voiceStyle == v,
+                          onSelected: (_) => prefs.setVoiceStyle(v),
+                          selectedColor: UthoTheme.accent,
+                          labelStyle: TextStyle(
+                            color: prefs.prefs.voiceStyle == v
+                                ? Colors.white
+                                : UthoTheme.textSecondary,
+                          ),
+                          backgroundColor: UthoTheme.surfaceCard,
+                          side: BorderSide.none,
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 28),
+            ],
+
+            // ── OpenAI API Key ──
             Text('OpenAI API Key',
                 style: Theme.of(context)
                     .textTheme
@@ -64,7 +140,7 @@ class SettingsScreen extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-              'Required for voice features. Stored securely on-device.',
+              'Required for OpenAI voice. Stored securely on-device.',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -72,32 +148,36 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (prefs.apiKey != null && prefs.apiKey!.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: UthoTheme.surfaceCard,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: UthoTheme.success, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Key set: sk-...${prefs.apiKey!.substring(prefs.apiKey!.length - 4)}',
-                        style: const TextStyle(color: UthoTheme.textPrimary, fontSize: 13),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => prefs.clearApiKey(),
-                      child: const Text('Remove',
-                          style: TextStyle(color: UthoTheme.danger)),
-                    ),
-                  ],
-                ),
+              _KeySetCard(
+                keyPreview: 'sk-...${prefs.apiKey!.substring(prefs.apiKey!.length - 4)}',
+                onRemove: prefs.clearApiKey,
               )
             else
-              _ApiKeyInput(onSave: prefs.setApiKey),
+              _ApiKeyInput(onSave: prefs.setApiKey, hint: 'sk-...'),
+            const SizedBox(height: 20),
+
+            // ── Gemini API Key ──
+            Text('Gemini API Key',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Required for Gemini Live voice. Stored securely on-device.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: UthoTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            if (prefs.geminiApiKey != null && prefs.geminiApiKey!.isNotEmpty)
+              _KeySetCard(
+                keyPreview: 'AIza...${prefs.geminiApiKey!.substring(prefs.geminiApiKey!.length - 4)}',
+                onRemove: prefs.clearGeminiApiKey,
+              )
+            else
+              _ApiKeyInput(onSave: prefs.setGeminiApiKey, hint: 'AIzaSy...'),
 
             const SizedBox(height: 16),
             Container(
@@ -113,8 +193,8 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'OpenAI recommends not exposing API keys in client-side apps. '
-                      'A backend token service is recommended for production.',
+                      'API keys are stored in secure storage (Android Keystore). '
+                      'They never leave your device.',
                       style: TextStyle(color: UthoTheme.textSecondary, fontSize: 11, height: 1.4),
                     ),
                   ),
@@ -179,9 +259,44 @@ class _ModeCard extends StatelessWidget {
   }
 }
 
+class _KeySetCard extends StatelessWidget {
+  final String keyPreview;
+  final VoidCallback onRemove;
+  const _KeySetCard({required this.keyPreview, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: UthoTheme.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: UthoTheme.success, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Key set: $keyPreview',
+              style: const TextStyle(color: UthoTheme.textPrimary, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: onRemove,
+            child: const Text('Remove',
+                style: TextStyle(color: UthoTheme.danger)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ApiKeyInput extends StatefulWidget {
   final Future<void> Function(String) onSave;
-  const _ApiKeyInput({required this.onSave});
+  final String hint;
+  const _ApiKeyInput({required this.onSave, this.hint = 'sk-...'});
 
   @override
   State<_ApiKeyInput> createState() => _ApiKeyInputState();
@@ -201,7 +316,7 @@ class _ApiKeyInputState extends State<_ApiKeyInput> {
             obscureText: _obscure,
             style: const TextStyle(color: UthoTheme.textPrimary, fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'sk-...',
+              hintText: widget.hint,
               hintStyle: const TextStyle(color: UthoTheme.textSecondary),
               filled: true,
               fillColor: UthoTheme.surfaceCard,

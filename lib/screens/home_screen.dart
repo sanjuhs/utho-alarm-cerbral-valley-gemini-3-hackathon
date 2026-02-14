@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/alarm_provider.dart';
 import '../providers/task_provider.dart';
 import '../providers/preferences_provider.dart';
+import '../services/database_service.dart';
 import '../utils/theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/alarm_card.dart';
@@ -20,15 +21,22 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _walletBalance = 0;
+
   @override
   void initState() {
     super.initState();
-    // Load data on first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AlarmProvider>().load();
       context.read<TaskProvider>().load();
       context.read<PreferencesProvider>().load();
+      _loadWallet();
     });
+  }
+
+  Future<void> _loadWallet() async {
+    final balance = await DatabaseService.getWalletBalance();
+    if (mounted) setState(() => _walletBalance = balance);
   }
 
   @override
@@ -71,14 +79,59 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
+                    // Wallet chip
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AlarmHistoryScreen()));
+                        _loadWallet();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _walletBalance >= 0
+                              ? const Color(0xFFFFD700).withAlpha(20)
+                              : UthoTheme.danger.withAlpha(20),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.toll_rounded,
+                                size: 14,
+                                color: _walletBalance >= 0
+                                    ? const Color(0xFFFFD700)
+                                    : UthoTheme.danger),
+                            const SizedBox(width: 4),
+                            Text(
+                              '₿$_walletBalance',
+                              style: TextStyle(
+                                color: _walletBalance >= 0
+                                    ? const Color(0xFFFFD700)
+                                    : UthoTheme.danger,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.history_rounded,
                           color: UthoTheme.textSecondary),
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const AlarmHistoryScreen())),
-                      tooltip: 'Alarm History',
+                      onPressed: () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AlarmHistoryScreen()));
+                        _loadWallet();
+                      },
+                      tooltip: 'Activity Log',
                     ),
                     IconButton(
                       icon: const Icon(Icons.settings_rounded,
@@ -213,10 +266,13 @@ class _HomeScreenState extends State<HomeScreen> {
           // Voice FAB
           FloatingActionButton(
             heroTag: 'voice',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const VoiceSessionScreen()),
-            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const VoiceSessionScreen()),
+              );
+              _loadWallet();
+            },
             backgroundColor: UthoTheme.surfaceElevated,
             child: const Icon(Icons.mic_rounded, color: UthoTheme.accent),
           ),
