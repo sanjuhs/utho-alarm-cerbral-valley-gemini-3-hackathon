@@ -75,6 +75,27 @@ class VoiceService {
         },
         {
           'type': 'function',
+          'name': 'create_alarm_relative',
+          'description':
+              'Create an alarm N minutes from now. Easier than calculating absolute time. '
+              'Use when user says "in 10 minutes", "after 30 min", etc.',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'minutes_from_now': {
+                'type': 'integer',
+                'description': 'Minutes from now to fire the alarm'
+              },
+              'label': {
+                'type': 'string',
+                'description': 'What the alarm is for'
+              },
+            },
+            'required': ['minutes_from_now', 'label'],
+          },
+        },
+        {
+          'type': 'function',
           'name': 'list_alarms',
           'description':
               'List all currently set alarms. Use this to check what alarms exist before creating or deleting.',
@@ -126,6 +147,7 @@ class VoiceService {
     String? tokenEndpoint,
     required AssistantMode mode,
     required String todayContext,
+    String? triggeringAlarmLabel,
   }) async {
     final token = apiKey ?? await _fetchEphemeralToken(tokenEndpoint!);
 
@@ -179,7 +201,8 @@ class VoiceService {
     _sendEvent({
       'type': 'session.update',
       'session': {
-        'instructions': _buildSystemPrompt(mode, todayContext),
+        'instructions':
+            _buildSystemPrompt(mode, todayContext, triggeringAlarmLabel),
         'tools': toolDefinitions,
         'voice': 'alloy',
         'input_audio_transcription': {'model': 'whisper-1'},
@@ -187,8 +210,12 @@ class VoiceService {
     });
   }
 
-  String _buildSystemPrompt(AssistantMode mode, String todayContext) {
+  String _buildSystemPrompt(
+      AssistantMode mode, String todayContext, String? triggeringAlarmLabel) {
     final now = DateTime.now();
+    final timeStr =
+        '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+
     final modeInstructions = switch (mode) {
       AssistantMode.indianMom =>
         'You are a loving but strict Indian mom. Use warm but guilt-trippy phrasing. '
@@ -206,33 +233,55 @@ class VoiceService {
             'suggest light goals, validate feelings. "Take it easy today".',
     };
 
-    return '''You are Utho!, an AI alarm clock assistant. You just woke the user up.
+    // Context-aware opening depends on whether an alarm triggered this session
+    final situationBlock = triggeringAlarmLabel != null
+        ? '''SITUATION: The alarm "$triggeringAlarmLabel" just rang and the user tapped "Talk". 
+This means they just finished (or are about to start) the activity: "$triggeringAlarmLabel".
+Your job: 
+1. Acknowledge the alarm — "Hey! Time for $triggeringAlarmLabel" or "Looks like your $triggeringAlarmLabel alarm just went off!"
+2. Ask what they're doing next
+3. Set the NEXT alarm based on their answer (e.g., "I'll brush" → set alarm for ~10 min later labeled "Done brushing")
+4. If they change plans ("actually no, I'll take a bath instead"), DELETE the irrelevant alarm and CREATE the new one'''
+        : '''SITUATION: The user opened a general voice session (not triggered by an alarm).
+Your job:
+1. Greet warmly based on your mode
+2. Read out their top priorities/alarms for today
+3. Ask if they want to set/change any alarms
+4. Help them plan their morning/day''';
+
+    return '''You are Utho!, an AI alarm clock and daily routine assistant.
 
 $modeInstructions
 
 LANGUAGES: The user speaks English, Hindi, and Kannada. Match their language. Default to English with natural Hindi/Kannada sprinkles.
 
-CURRENT TIME: ${now.hour}:${now.minute.toString().padLeft(2, '0')} on ${now.day}/${now.month}/${now.year}
+CURRENT TIME: $timeStr on ${now.day}/${now.month}/${now.year}
 
-CONTEXT — Today's schedule and tasks:
+$situationBlock
+
 $todayContext
 
-ALARM MANAGEMENT — THIS IS CRITICAL:
-- You MUST proactively create alarms for the user's next activity at the end of each conversation.
-- Example: if user says "I'll brush my teeth now", create an alarm for ~10 minutes later labeled "Done brushing — next activity?"
-- If user says "I'll take a bath after this", create an alarm for that.
-- If user says their plan changed (e.g., "actually I won't brush, I'll take a bath"), DELETE the old alarm and CREATE the new one.
-- Before creating, call list_alarms to check existing alarms and avoid duplicates.
-- Always CONFIRM what alarm you set: "Ok, I've set an alarm for 7:15 AM for your bath!"
-- Use delete_alarm when the user cancels or changes plans.
+ALARM MANAGEMENT — YOUR CORE CAPABILITY:
+- You are the user's routine manager. You chain alarms through the day based on conversation.
+- FLOW: Wake-up alarm → user talks to you → you set alarm for next activity → that alarm rings → user talks to you again → you set the NEXT alarm → repeat all day.
+- Each alarm you create should have a clear, specific label describing the activity (e.g., "Start bath", "Leave for office", "Lunch break", "Evening walk").
+- When the user tells you what they're doing, calculate a reasonable time for the next alarm:
+  * Brushing teeth: ~10 min
+  * Bathing: ~20-30 min  
+  * Getting dressed: ~15 min
+  * Breakfast: ~20 min
+  * Commute: ask them how long
+  * Custom: ask if unsure
+- If the user changes plans mid-conversation, DELETE the old planned alarm and CREATE the new one. Always confirm both actions.
+- Before creating, call list_alarms to avoid duplicates.
+- Always CONFIRM: "OK, I've set an alarm for 7:45 labeled 'Start bath'. I'll check in then!"
+- At conversation end, ALWAYS ensure there's a next alarm set. If not, ask: "What's your next thing? I'll set an alarm."
 
 BEHAVIOR:
-- Greet the user warmly based on your mode
-- Read out their top priorities for today
 - Keep responses concise (2-3 spoken sentences max)
 - Be proactive: suggest time blocks, warn about conflicts
 - If they sound groggy, be encouraging but firm (based on mode)
-- At the end of the conversation, always ask: "Should I set an alarm for your next thing?"
+- Never leave a conversation without confirming the next alarm is set
 ''';
   }
 

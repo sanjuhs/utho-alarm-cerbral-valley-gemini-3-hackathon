@@ -87,7 +87,9 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     _stopAlarm();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const VoiceSessionScreen()),
+      MaterialPageRoute(
+        builder: (_) => VoiceSessionScreen(triggeringAlarm: widget.alarm),
+      ),
     );
   }
 

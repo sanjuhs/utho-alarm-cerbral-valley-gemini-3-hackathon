@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import '../models/alarm.dart';
 import '../providers/alarm_provider.dart';
 import '../providers/task_provider.dart';
 import '../providers/preferences_provider.dart';
@@ -9,7 +10,11 @@ import '../services/voice_service.dart';
 import '../utils/theme.dart';
 
 class VoiceSessionScreen extends StatefulWidget {
-  const VoiceSessionScreen({super.key});
+  /// If non-null, the alarm that triggered this session (ringing screen → talk).
+  /// The AI gets full context about which alarm fired and manages follow-ups.
+  final Alarm? triggeringAlarm;
+
+  const VoiceSessionScreen({super.key, this.triggeringAlarm});
 
   @override
   State<VoiceSessionScreen> createState() => _VoiceSessionScreenState();
@@ -38,32 +43,51 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
   Future<void> _startSession() async {
     final prefs = context.read<PreferencesProvider>();
     final tasks = context.read<TaskProvider>();
-    final alarms = context.read<AlarmProvider>();
+    final alarmProv = context.read<AlarmProvider>();
 
-    // Request mic permission before voice session
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) {
       setState(() => _status = 'Microphone permission required for voice.');
       return;
     }
 
-    // Build context string for the assistant
+    // Build rich context for the AI
     final contextBuf = StringBuffer();
-    contextBuf.writeln('Tasks: ${tasks.todaySummary}');
-    final enabledAlarms = alarms.alarms.where((a) => a.enabled).toList();
-    if (enabledAlarms.isNotEmpty) {
-      contextBuf.writeln('Alarms set:');
-      for (final a in enabledAlarms) {
-        contextBuf.writeln('  - ${a.label.isNotEmpty ? a.label : "Alarm"} at ${a.time.hour}:${a.time.minute.toString().padLeft(2, '0')}');
+
+    // Triggering alarm context
+    final trigger = widget.triggeringAlarm;
+    if (trigger != null) {
+      contextBuf.writeln('THIS SESSION WAS TRIGGERED BY ALARM:');
+      contextBuf.writeln('  Label: "${trigger.label.isNotEmpty ? trigger.label : "Wake up"}"');
+      contextBuf.writeln('  Scheduled for: ${trigger.time.hour}:${trigger.time.minute.toString().padLeft(2, '0')}');
+      if (trigger.focusLabel != null) {
+        contextBuf.writeln('  Focus: ${trigger.focusLabel}');
       }
+      contextBuf.writeln('');
     }
 
-    // Listen for transcripts
+    // All existing alarms (so AI knows what's already set)
+    final enabledAlarms = alarmProv.alarms.where((a) => a.enabled).toList();
+    if (enabledAlarms.isNotEmpty) {
+      contextBuf.writeln('ALL CURRENTLY SET ALARMS:');
+      for (final a in enabledAlarms) {
+        final label = a.label.isNotEmpty ? a.label : 'Alarm';
+        final t = '${a.time.hour}:${a.time.minute.toString().padLeft(2, '0')}';
+        final ft = '${a.nextFireTime.hour}:${a.nextFireTime.minute.toString().padLeft(2, '0')}';
+        contextBuf.writeln('  - "$label" at $t (next fires: $ft) [id: ${a.id}]');
+      }
+      contextBuf.writeln('');
+    } else {
+      contextBuf.writeln('NO ALARMS CURRENTLY SET.');
+      contextBuf.writeln('');
+    }
+
+    // Tasks
+    contextBuf.writeln('Tasks: ${tasks.todaySummary}');
+
     _transcriptSub = _voice.transcriptStream.listen((delta) {
       setState(() => _transcript.write(delta));
     });
-
-    // Listen for tool calls
     _toolCallSub = _voice.toolCallStream.listen(_handleToolCall);
 
     try {
@@ -77,6 +101,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
         apiKey: apiKey,
         mode: prefs.prefs.mode,
         todayContext: contextBuf.toString(),
+        triggeringAlarmLabel: trigger?.label,
       );
       setState(() {
         _connected = true;
@@ -148,6 +173,23 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
                         '${a.nextFireTime.hour}:${a.nextFireTime.minute.toString().padLeft(2, '0')}',
                   })
               .toList(),
+        };
+        break;
+
+      case 'create_alarm_relative':
+        final minutesFromNow = args['minutes_from_now'] as int;
+        final futureTime = DateTime.now().add(Duration(minutes: minutesFromNow));
+        final relAlarm = await alarmProv.addAlarm(
+          hour: futureTime.hour,
+          minute: futureTime.minute,
+          label: args['label'] as String? ?? '',
+        );
+        result = {
+          'status': 'ok',
+          'alarm_id': relAlarm.id,
+          'fires_at':
+              '${futureTime.hour}:${futureTime.minute.toString().padLeft(2, '0')}',
+          'minutes_from_now': minutesFromNow,
         };
         break;
 
