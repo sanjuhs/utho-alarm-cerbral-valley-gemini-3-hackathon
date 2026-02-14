@@ -85,14 +85,10 @@ class AlarmScheduler {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // Handle cold start from notification tap
-    final launchDetails = await _notifPlugin.getNotificationAppLaunchDetails();
-    if (launchDetails?.didNotificationLaunchApp == true &&
-        launchDetails!.notificationResponse != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _onNotificationTap(launchDetails.notificationResponse!);
-      });
-    }
+    // Cancel all lingering alarm notifications from previous sessions
+    // to prevent them from re-triggering on app start.
+    await _notifPlugin.cancelAll();
+    debugPrint('[Utho] Cleared stale notifications on init');
 
     // Listen for alarm fires from the background isolate
     final receivePort = ReceivePort();
@@ -157,9 +153,15 @@ class AlarmScheduler {
     // Cancel any existing alarm with this id
     await AndroidAlarmManager.cancel(alarmId);
 
-    // If fire time is in the past or within 3 seconds, fire immediately
-    if (secondsUntil <= 3) {
-      debugPrint('[Utho] Fire time is NOW or past — firing immediately');
+    // If fire time is in the past, skip — don't fire stale alarms
+    if (secondsUntil < 0) {
+      debugPrint('[Utho] Fire time is in the past (${secondsUntil}s ago) — skipping');
+      return;
+    }
+
+    // If fire time is within 5 seconds, fire immediately (fresh alarm, just created)
+    if (secondsUntil <= 5) {
+      debugPrint('[Utho] Fire time is NOW — firing immediately');
       await uthoAlarmCallback(alarmId);
       return;
     }

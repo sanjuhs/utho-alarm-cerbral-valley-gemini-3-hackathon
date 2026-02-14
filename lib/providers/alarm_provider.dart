@@ -13,6 +13,16 @@ class AlarmProvider extends ChangeNotifier {
     if (_loaded) return;
     _alarms = await DatabaseService.getAlarms();
     _loaded = true;
+
+    // Re-schedule future alarms. Stale one-shots (time already passed today)
+    // will be skipped by AlarmScheduler.schedule() since nextFireTime rolls
+    // to tomorrow — they won't fire erroneously.
+    for (int i = 0; i < _alarms.length; i++) {
+      final alarm = _alarms[i];
+      if (!alarm.enabled) continue;
+      await AlarmScheduler.schedule(alarm);
+    }
+
     notifyListeners();
   }
 

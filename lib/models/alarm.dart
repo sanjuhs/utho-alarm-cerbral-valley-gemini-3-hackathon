@@ -66,16 +66,14 @@ class Alarm {
       );
 
   /// Next fire time from now (accounts for repeat days).
-  /// Grace window: if we're within 90s past the target, still return today's time
-  /// so the alarm fires immediately rather than rolling to tomorrow.
+  /// No grace window — if time has passed, it rolls to the next valid day.
   DateTime get nextFireTime {
     final now = DateTime.now();
     var candidate = DateTime(now.year, now.month, now.day, time.hour, time.minute);
 
     if (repeatDays.isEmpty) {
-      // One-shot: if time passed more than 90s ago, fire tomorrow
-      if (candidate.isBefore(now) &&
-          now.difference(candidate).inSeconds > 90) {
+      // One-shot: if time has already passed, roll to tomorrow
+      if (candidate.isBefore(now)) {
         candidate = candidate.add(const Duration(days: 1));
       }
       return candidate;

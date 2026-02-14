@@ -24,6 +24,15 @@ class VoiceService extends BaseVoiceService {
   Stream<Map<String, dynamic>> get toolCallStream => _toolCallController.stream;
   @override
   bool get isConnected => _connected;
+  bool _muted = false;
+  @override
+  bool get isMuted => _muted;
+  @override
+  void setMuted(bool muted) {
+    _muted = muted;
+    // Mute/unmute the local audio track
+    _localStream?.getAudioTracks().forEach((t) => t.enabled = !muted);
+  }
 
   static List<Map<String, dynamic>> get toolDefinitions =>
       BaseVoiceService.openAIToolDefinitions;

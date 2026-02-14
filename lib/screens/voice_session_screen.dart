@@ -39,6 +39,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
   final _sessionId = const Uuid().v4();
   String _status = 'Connecting...';
   bool _connected = false;
+  bool _muted = false;
   int _walletBalance = 0;
   late final AnimationController _waveController;
   StreamSubscription? _transcriptSub;
@@ -488,25 +489,52 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // End session
+          // Mute + End session row
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.stop_rounded),
-                label: const Text('End Session'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: UthoTheme.danger,
-                  side: const BorderSide(color: UthoTheme.danger),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+            child: Row(
+              children: [
+                // Mute button
+                if (_connected)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: IconButton.filled(
+                      onPressed: () {
+                        setState(() {
+                          _muted = !_muted;
+                          _voice.setMuted(_muted);
+                          _status = _muted ? 'Mic muted' : 'Listening...';
+                        });
+                      },
+                      icon: Icon(_muted ? Icons.mic_off_rounded : Icons.mic_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor: _muted
+                            ? UthoTheme.danger.withAlpha(40)
+                            : UthoTheme.accent.withAlpha(40),
+                        foregroundColor: _muted ? UthoTheme.danger : UthoTheme.accent,
+                        padding: const EdgeInsets.all(14),
+                      ),
+                      tooltip: _muted ? 'Unmute mic' : 'Mute mic',
+                    ),
+                  ),
+                // End session
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.stop_rounded),
+                    label: const Text('End Session'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: UthoTheme.danger,
+                      side: const BorderSide(color: UthoTheme.danger),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],

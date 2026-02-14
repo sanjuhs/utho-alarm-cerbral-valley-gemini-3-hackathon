@@ -7,6 +7,7 @@ abstract class BaseVoiceService {
   Stream<String> get transcriptStream;
   Stream<Map<String, dynamic>> get toolCallStream;
   bool get isConnected;
+  bool get isMuted;
 
   Future<void> connect({
     required String apiKey,
@@ -16,6 +17,7 @@ abstract class BaseVoiceService {
   });
 
   void sendToolResult(String callId, dynamic result);
+  void setMuted(bool muted);
   Future<void> disconnect();
   void dispose();
 

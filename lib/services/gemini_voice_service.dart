@@ -1,18 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/preferences.dart';
 import 'base_voice_service.dart';
 
 /// Gemini Live API via WebSocket + raw PCM audio.
-/// Uses `record` package for mic capture, streams 16kHz mono PCM to Gemini.
+/// Mic: `record` package streams 16kHz mono PCM to Gemini.
+/// Speaker: accumulates 24kHz PCM chunks per turn, wraps in WAV, plays via audioplayers.
 class GeminiVoiceService extends BaseVoiceService {
   static const _wsHost = 'generativelanguage.googleapis.com';
   static const _wsPath =
       'ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
   static const _sendSampleRate = 16000;
+  static const _recvSampleRate = 24000;
   static const _model = 'gemini-2.5-flash-preview-native-audio-dialog';
 
   WebSocketChannel? _ws;
@@ -20,6 +26,11 @@ class GeminiVoiceService extends BaseVoiceService {
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _micSub;
   bool _connected = false;
+  bool _muted = false;
+
+  // Audio playback
+  final AudioPlayer _player = AudioPlayer();
+  final BytesBuilder _audioBuf = BytesBuilder(copy: false);
 
   final _transcriptController = StreamController<String>.broadcast();
   final _toolCallController =
@@ -32,6 +43,14 @@ class GeminiVoiceService extends BaseVoiceService {
       _toolCallController.stream;
   @override
   bool get isConnected => _connected;
+  @override
+  bool get isMuted => _muted;
+
+  @override
+  void setMuted(bool muted) {
+    _muted = muted;
+    debugPrint('[Utho/Gemini] Mic ${muted ? "muted" : "unmuted"}');
+  }
 
   @override
   Future<void> connect({
@@ -47,7 +66,6 @@ class GeminiVoiceService extends BaseVoiceService {
     await _ws!.ready;
     debugPrint('[Utho/Gemini] WebSocket connected, sending setup...');
 
-    // Send setup message
     final tools = BaseVoiceService.geminiToolDeclarations;
     final setupMsg = jsonEncode({
       'setup': {
@@ -70,7 +88,6 @@ class GeminiVoiceService extends BaseVoiceService {
     final toolCount = (tools.first['function_declarations'] as List).length;
     debugPrint('[Utho/Gemini] Setup sent with $toolCount tools');
 
-    // Listen for messages
     _wsSub = _ws!.stream.listen(
       _handleMessage,
       onError: (e) {
@@ -133,7 +150,9 @@ class GeminiVoiceService extends BaseVoiceService {
       if (data.containsKey('serverContent')) {
         final sc = data['serverContent'] as Map<String, dynamic>;
         if (sc['interrupted'] == true) {
-          debugPrint('[Utho/Gemini] Interrupted');
+          debugPrint('[Utho/Gemini] Interrupted — flushing audio buffer');
+          _audioBuf.clear();
+          _player.stop();
           return;
         }
         final modelTurn = sc['modelTurn'] as Map<String, dynamic>?;
@@ -143,16 +162,71 @@ class GeminiVoiceService extends BaseVoiceService {
           if (p.containsKey('text')) {
             _transcriptController.add(p['text'] as String);
           }
-          // Audio comes as inlineData — Gemini handles playback via audio output
-          // If we wanted local playback, we'd decode the PCM here.
+          // Accumulate audio PCM chunks
+          if (p.containsKey('inlineData')) {
+            final inlineData = p['inlineData'] as Map<String, dynamic>;
+            final b64 = inlineData['data'] as String?;
+            if (b64 != null && b64.isNotEmpty) {
+              _audioBuf.add(base64Decode(b64));
+            }
+          }
         }
         if (sc['turnComplete'] == true) {
-          debugPrint('[Utho/Gemini] Turn complete');
+          debugPrint('[Utho/Gemini] Turn complete — playing audio (${_audioBuf.length} bytes PCM)');
+          _playAccumulatedAudio();
         }
       }
     } catch (e) {
       debugPrint('[Utho/Gemini] Parse error: $e');
     }
+  }
+
+  /// Wrap accumulated PCM16 bytes in a WAV header and play via audioplayers.
+  Future<void> _playAccumulatedAudio() async {
+    final pcmBytes = _audioBuf.takeBytes();
+    if (pcmBytes.isEmpty) return;
+
+    final wavBytes = _pcmToWav(pcmBytes, _recvSampleRate, 1, 16);
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/gemini_reply_${DateTime.now().millisecondsSinceEpoch}.wav');
+      await file.writeAsBytes(wavBytes);
+      await _player.play(DeviceFileSource(file.path));
+      debugPrint('[Utho/Gemini] Playing ${pcmBytes.length} bytes of audio');
+    } catch (e) {
+      debugPrint('[Utho/Gemini] Audio playback error: $e');
+    }
+  }
+
+  /// Create a WAV file from raw PCM bytes.
+  Uint8List _pcmToWav(Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
+    final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
+    final blockAlign = channels * (bitsPerSample ~/ 8);
+    final dataSize = pcmData.length;
+    final fileSize = 36 + dataSize;
+
+    final buf = ByteData(44 + dataSize);
+    // RIFF header
+    buf.setUint8(0, 0x52); buf.setUint8(1, 0x49); buf.setUint8(2, 0x46); buf.setUint8(3, 0x46); // "RIFF"
+    buf.setUint32(4, fileSize, Endian.little);
+    buf.setUint8(8, 0x57); buf.setUint8(9, 0x41); buf.setUint8(10, 0x56); buf.setUint8(11, 0x45); // "WAVE"
+    // fmt chunk
+    buf.setUint8(12, 0x66); buf.setUint8(13, 0x6D); buf.setUint8(14, 0x74); buf.setUint8(15, 0x20); // "fmt "
+    buf.setUint32(16, 16, Endian.little); // chunk size
+    buf.setUint16(20, 1, Endian.little); // PCM format
+    buf.setUint16(22, channels, Endian.little);
+    buf.setUint32(24, sampleRate, Endian.little);
+    buf.setUint32(28, byteRate, Endian.little);
+    buf.setUint16(32, blockAlign, Endian.little);
+    buf.setUint16(34, bitsPerSample, Endian.little);
+    // data chunk
+    buf.setUint8(36, 0x64); buf.setUint8(37, 0x61); buf.setUint8(38, 0x74); buf.setUint8(39, 0x61); // "data"
+    buf.setUint32(40, dataSize, Endian.little);
+    // PCM data
+    for (var i = 0; i < pcmData.length; i++) {
+      buf.setUint8(44 + i, pcmData[i]);
+    }
+    return buf.buffer.asUint8List();
   }
 
   Future<void> _startMicStreaming() async {
@@ -163,7 +237,6 @@ class GeminiVoiceService extends BaseVoiceService {
         return;
       }
 
-      // Start recording as PCM 16-bit, 16kHz, mono → streamed as Uint8List chunks
       final stream = await _recorder.startStream(RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: _sendSampleRate,
@@ -173,7 +246,7 @@ class GeminiVoiceService extends BaseVoiceService {
       debugPrint('[Utho/Gemini] Mic streaming at ${_sendSampleRate}Hz mono PCM');
 
       _micSub = stream.listen((Uint8List chunk) {
-        if (_ws != null && _connected && chunk.isNotEmpty) {
+        if (_ws != null && _connected && chunk.isNotEmpty && !_muted) {
           final b64 = base64Encode(chunk);
           _ws!.sink.add(jsonEncode({
             'realtime_input': {
@@ -212,12 +285,14 @@ class GeminiVoiceService extends BaseVoiceService {
     _wsSub = null;
     await _ws?.sink.close();
     _ws = null;
+    await _player.stop();
   }
 
   @override
   void dispose() {
     disconnect();
     _recorder.dispose();
+    _player.dispose();
     _transcriptController.close();
     _toolCallController.close();
   }
