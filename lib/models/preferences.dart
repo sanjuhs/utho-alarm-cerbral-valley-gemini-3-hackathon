@@ -1,14 +1,15 @@
 enum AssistantMode {
-  indianMom('indian_mom', 'Indian Mom', '🫶', 'Caring + strict + guilt-trippy'),
-  bestFriend('best_friend', 'Best Friend', '🔥', 'Hype + supportive'),
-  boss('boss', 'Boss', '💼', 'Crisp, ruthless, deadlines'),
-  soft('soft', 'Soft', '🌙', 'Gentle for low-energy days');
+  indianMom('indian_mom', 'Indian Mom', '🫶', 'Caring + strict + guilt-trippy', 'assets/images/mom/image-mom.png'),
+  bestFriend('best_friend', 'Best Friend', '🔥', 'Hype + supportive', 'assets/images/friend/image-friend.png'),
+  boss('boss', 'Boss', '💼', 'Crisp, ruthless, deadlines', 'assets/images/boss/image.png'),
+  soft('soft', 'Soft', '🌙', 'Gentle for low-energy days', 'assets/images/soft-girl/image.png');
 
   final String key;
   final String displayName;
   final String emoji;
   final String description;
-  const AssistantMode(this.key, this.displayName, this.emoji, this.description);
+  final String imagePath;
+  const AssistantMode(this.key, this.displayName, this.emoji, this.description, this.imagePath);
 
   static AssistantMode fromKey(String key) =>
       AssistantMode.values.firstWhere((m) => m.key == key, orElse: () => bestFriend);

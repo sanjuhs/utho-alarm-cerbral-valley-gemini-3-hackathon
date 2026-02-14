@@ -315,37 +315,58 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
 
           const Spacer(),
 
-          // Animated orb
-          AnimatedBuilder(
-            animation: _waveController,
-            builder: (_, __) {
-              return Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      UthoTheme.accent.withAlpha(_connected ? 200 : 60),
-                      UthoTheme.accent.withAlpha(40),
-                      Colors.transparent,
-                    ],
-                    stops: [
-                      0.0,
-                      0.5 + _waveController.value * 0.2,
-                      1.0,
-                    ],
-                  ),
-                ),
-                child: Icon(
-                  _connected ? Icons.mic_rounded : Icons.mic_off_rounded,
-                  size: 48,
-                  color: _connected ? Colors.white : UthoTheme.textSecondary,
-                ),
+          // Persona avatar with animated glow
+          Consumer<PreferencesProvider>(
+            builder: (_, prefs, __) {
+              final mode = prefs.prefs.mode;
+              return AnimatedBuilder(
+                animation: _waveController,
+                builder: (_, __) {
+                  final glowAlpha = _connected
+                      ? (100 + (_waveController.value * 100).toInt())
+                      : 30;
+                  return Container(
+                    width: 180,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: UthoTheme.accent.withAlpha(glowAlpha),
+                          blurRadius: 40 + _waveController.value * 20,
+                          spreadRadius: 5 + _waveController.value * 10,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        mode.imagePath,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        opacity: AlwaysStoppedAnimation(
+                            _connected ? 1.0 : 0.5),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Mode label
+          Consumer<PreferencesProvider>(
+            builder: (_, prefs, __) => Text(
+              '${prefs.prefs.mode.emoji} ${prefs.prefs.mode.displayName}',
+              style: const TextStyle(
+                color: UthoTheme.accent,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
 
           Text(
             _status,
@@ -354,7 +375,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen>
                 .bodyMedium
                 ?.copyWith(color: UthoTheme.textSecondary),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
           // Transcript
           Expanded(

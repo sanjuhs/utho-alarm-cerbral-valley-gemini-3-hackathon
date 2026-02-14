@@ -63,3 +63,7 @@ flutter:
   assets:
     - assets/sounds/
     - assets/images/
+    - assets/images/mom/
+    - assets/images/friend/
+    - assets/images/boss/
+    - assets/images/soft-girl/
