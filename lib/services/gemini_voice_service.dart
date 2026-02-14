@@ -19,7 +19,8 @@ class GeminiVoiceService extends BaseVoiceService {
       'ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
   static const _sendSampleRate = 16000;
   static const _recvSampleRate = 24000;
-  static const _model = 'gemini-2.5-flash-preview-native-audio-dialog';
+  // Use the latest stable native audio model
+  static const _model = 'gemini-2.5-flash-native-audio-latest';
 
   WebSocketChannel? _ws;
   StreamSubscription? _wsSub;
@@ -27,6 +28,7 @@ class GeminiVoiceService extends BaseVoiceService {
   StreamSubscription<Uint8List>? _micSub;
   bool _connected = false;
   bool _muted = false;
+  bool _recorderStarted = false;
 
   // Audio playback
   final AudioPlayer _player = AudioPlayer();
@@ -61,41 +63,58 @@ class GeminiVoiceService extends BaseVoiceService {
   }) async {
     final uri = Uri.parse('wss://$_wsHost/$_wsPath?key=$apiKey');
     debugPrint('[Utho/Gemini] Connecting to $_model...');
+    debugPrint('[Utho/Gemini] URI: wss://$_wsHost/$_wsPath?key=${apiKey.substring(0, 8)}...');
 
     _ws = WebSocketChannel.connect(uri);
     await _ws!.ready;
     debugPrint('[Utho/Gemini] WebSocket connected, sending setup...');
 
+    // Build tools in Gemini format
     final tools = BaseVoiceService.geminiToolDeclarations;
+
+    // NOTE: generativelanguage.googleapis.com uses camelCase JSON keys
+    final systemPrompt = BaseVoiceService.buildSystemPrompt(
+        mode, todayContext, triggeringAlarmLabel);
+
     final setupMsg = jsonEncode({
       'setup': {
         'model': 'models/$_model',
-        'generation_config': {
-          'response_modalities': ['AUDIO'],
+        'generationConfig': {
+          'responseModalities': ['AUDIO'],
         },
         'tools': tools,
-        'system_instruction': {
+        'systemInstruction': {
           'parts': [
-            {
-              'text': BaseVoiceService.buildSystemPrompt(
-                  mode, todayContext, triggeringAlarmLabel),
-            },
+            {'text': systemPrompt},
           ],
         },
       },
     });
-    _ws!.sink.add(setupMsg);
-    final toolCount = (tools.first['function_declarations'] as List).length;
-    debugPrint('[Utho/Gemini] Setup sent with $toolCount tools');
 
+    debugPrint('[Utho/Gemini] Setup message model: models/$_model');
+    debugPrint('[Utho/Gemini] Setup message length: ${setupMsg.length} chars');
+    final toolCount = (tools.first['function_declarations'] as List).length;
+    debugPrint('[Utho/Gemini] Tools: $toolCount declarations');
+
+    _ws!.sink.add(setupMsg);
+
+    // Listen for messages
     _wsSub = _ws!.stream.listen(
       _handleMessage,
       onError: (e) {
         debugPrint('[Utho/Gemini] WS error: $e');
         _connected = false;
+        _transcriptController.add('\n[Gemini connection error: $e]');
       },
       onDone: () {
-        debugPrint('[Utho/Gemini] WS closed');
+        final code = _ws?.closeCode;
+        final reason = _ws?.closeReason;
+        debugPrint('[Utho/Gemini] WS closed — code=$code reason=$reason');
+        if (!_connected) {
+          // Connection failed before setupComplete
+          _transcriptController.add(
+              '\n[Gemini WebSocket closed before session started. code=$code reason=$reason]');
+        }
         _connected = false;
       },
     );
@@ -111,6 +130,9 @@ class GeminiVoiceService extends BaseVoiceService {
       } else {
         text = raw as String;
       }
+
+      // Log the first 300 chars for debugging
+      debugPrint('[Utho/Gemini] MSG: ${text.length > 300 ? '${text.substring(0, 300)}...' : text}');
 
       final data = jsonDecode(text) as Map<String, dynamic>;
 
@@ -160,7 +182,9 @@ class GeminiVoiceService extends BaseVoiceService {
             (modelTurn?['parts'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         for (final p in parts) {
           if (p.containsKey('text')) {
-            _transcriptController.add(p['text'] as String);
+            final t = p['text'] as String;
+            debugPrint('[Utho/Gemini] Text: $t');
+            _transcriptController.add(t);
           }
           // Accumulate audio PCM chunks
           if (p.containsKey('inlineData')) {
@@ -172,7 +196,8 @@ class GeminiVoiceService extends BaseVoiceService {
           }
         }
         if (sc['turnComplete'] == true) {
-          debugPrint('[Utho/Gemini] Turn complete — playing audio (${_audioBuf.length} bytes PCM)');
+          debugPrint(
+              '[Utho/Gemini] Turn complete — playing audio (${_audioBuf.length} bytes PCM)');
           _playAccumulatedAudio();
         }
       }
@@ -184,12 +209,16 @@ class GeminiVoiceService extends BaseVoiceService {
   /// Wrap accumulated PCM16 bytes in a WAV header and play via audioplayers.
   Future<void> _playAccumulatedAudio() async {
     final pcmBytes = _audioBuf.takeBytes();
-    if (pcmBytes.isEmpty) return;
+    if (pcmBytes.isEmpty) {
+      debugPrint('[Utho/Gemini] No audio to play');
+      return;
+    }
 
     final wavBytes = _pcmToWav(pcmBytes, _recvSampleRate, 1, 16);
     try {
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/gemini_reply_${DateTime.now().millisecondsSinceEpoch}.wav');
+      final file = File(
+          '${dir.path}/gemini_reply_${DateTime.now().millisecondsSinceEpoch}.wav');
       await file.writeAsBytes(wavBytes);
       await _player.play(DeviceFileSource(file.path));
       debugPrint('[Utho/Gemini] Playing ${pcmBytes.length} bytes of audio');
@@ -199,7 +228,8 @@ class GeminiVoiceService extends BaseVoiceService {
   }
 
   /// Create a WAV file from raw PCM bytes.
-  Uint8List _pcmToWav(Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
+  Uint8List _pcmToWav(
+      Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
     final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
     final blockAlign = channels * (bitsPerSample ~/ 8);
     final dataSize = pcmData.length;
@@ -207,20 +237,20 @@ class GeminiVoiceService extends BaseVoiceService {
 
     final buf = ByteData(44 + dataSize);
     // RIFF header
-    buf.setUint8(0, 0x52); buf.setUint8(1, 0x49); buf.setUint8(2, 0x46); buf.setUint8(3, 0x46); // "RIFF"
+    buf.setUint8(0, 0x52); buf.setUint8(1, 0x49); buf.setUint8(2, 0x46); buf.setUint8(3, 0x46);
     buf.setUint32(4, fileSize, Endian.little);
-    buf.setUint8(8, 0x57); buf.setUint8(9, 0x41); buf.setUint8(10, 0x56); buf.setUint8(11, 0x45); // "WAVE"
+    buf.setUint8(8, 0x57); buf.setUint8(9, 0x41); buf.setUint8(10, 0x56); buf.setUint8(11, 0x45);
     // fmt chunk
-    buf.setUint8(12, 0x66); buf.setUint8(13, 0x6D); buf.setUint8(14, 0x74); buf.setUint8(15, 0x20); // "fmt "
-    buf.setUint32(16, 16, Endian.little); // chunk size
-    buf.setUint16(20, 1, Endian.little); // PCM format
+    buf.setUint8(12, 0x66); buf.setUint8(13, 0x6D); buf.setUint8(14, 0x74); buf.setUint8(15, 0x20);
+    buf.setUint32(16, 16, Endian.little);
+    buf.setUint16(20, 1, Endian.little);
     buf.setUint16(22, channels, Endian.little);
     buf.setUint32(24, sampleRate, Endian.little);
     buf.setUint32(28, byteRate, Endian.little);
     buf.setUint16(32, blockAlign, Endian.little);
     buf.setUint16(34, bitsPerSample, Endian.little);
     // data chunk
-    buf.setUint8(36, 0x64); buf.setUint8(37, 0x61); buf.setUint8(38, 0x74); buf.setUint8(39, 0x61); // "data"
+    buf.setUint8(36, 0x64); buf.setUint8(37, 0x61); buf.setUint8(38, 0x74); buf.setUint8(39, 0x61);
     buf.setUint32(40, dataSize, Endian.little);
     // PCM data
     for (var i = 0; i < pcmData.length; i++) {
@@ -242,16 +272,18 @@ class GeminiVoiceService extends BaseVoiceService {
         sampleRate: _sendSampleRate,
         numChannels: 1,
       ));
+      _recorderStarted = true;
 
-      debugPrint('[Utho/Gemini] Mic streaming at ${_sendSampleRate}Hz mono PCM');
+      debugPrint(
+          '[Utho/Gemini] Mic streaming at ${_sendSampleRate}Hz mono PCM');
 
       _micSub = stream.listen((Uint8List chunk) {
         if (_ws != null && _connected && chunk.isNotEmpty && !_muted) {
           final b64 = base64Encode(chunk);
           _ws!.sink.add(jsonEncode({
-            'realtime_input': {
-              'media_chunks': [
-                {'data': b64, 'mime_type': 'audio/pcm'},
+            'realtimeInput': {
+              'mediaChunks': [
+                {'data': b64, 'mimeType': 'audio/pcm'},
               ],
             },
           }));
@@ -266,8 +298,8 @@ class GeminiVoiceService extends BaseVoiceService {
   void sendToolResult(String callId, dynamic result) {
     if (_ws == null) return;
     _ws!.sink.add(jsonEncode({
-      'tool_response': {
-        'function_responses': [
+      'toolResponse': {
+        'functionResponses': [
           {'id': callId, 'response': result},
         ],
       },
@@ -280,7 +312,12 @@ class GeminiVoiceService extends BaseVoiceService {
     _connected = false;
     await _micSub?.cancel();
     _micSub = null;
-    await _recorder.stop();
+    if (_recorderStarted) {
+      try {
+        await _recorder.stop();
+      } catch (_) {}
+      _recorderStarted = false;
+    }
     await _wsSub?.cancel();
     _wsSub = null;
     await _ws?.sink.close();
