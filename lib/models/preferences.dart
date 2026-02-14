@@ -1,0 +1,58 @@
+enum AssistantMode {
+  indianMom('indian_mom', 'Indian Mom', '🫶', 'Caring + strict + guilt-trippy'),
+  bestFriend('best_friend', 'Best Friend', '🔥', 'Hype + supportive'),
+  boss('boss', 'Boss', '💼', 'Crisp, ruthless, deadlines'),
+  soft('soft', 'Soft', '🌙', 'Gentle for low-energy days');
+
+  final String key;
+  final String displayName;
+  final String emoji;
+  final String description;
+  const AssistantMode(this.key, this.displayName, this.emoji, this.description);
+
+  static AssistantMode fromKey(String key) =>
+      AssistantMode.values.firstWhere((m) => m.key == key, orElse: () => bestFriend);
+}
+
+class UserPreferences {
+  final AssistantMode mode;
+  final String voiceStyle;
+  final int defaultReminderCadenceMinutes;
+  final bool useBYOK;
+
+  const UserPreferences({
+    this.mode = AssistantMode.bestFriend,
+    this.voiceStyle = 'alloy',
+    this.defaultReminderCadenceMinutes = 30,
+    this.useBYOK = false,
+  });
+
+  UserPreferences copyWith({
+    AssistantMode? mode,
+    String? voiceStyle,
+    int? defaultReminderCadenceMinutes,
+    bool? useBYOK,
+  }) =>
+      UserPreferences(
+        mode: mode ?? this.mode,
+        voiceStyle: voiceStyle ?? this.voiceStyle,
+        defaultReminderCadenceMinutes:
+            defaultReminderCadenceMinutes ?? this.defaultReminderCadenceMinutes,
+        useBYOK: useBYOK ?? this.useBYOK,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'mode': mode.key,
+        'voice_style': voiceStyle,
+        'default_reminder_cadence_minutes': defaultReminderCadenceMinutes,
+        'use_byok': useBYOK ? 1 : 0,
+      };
+
+  factory UserPreferences.fromMap(Map<String, dynamic> m) => UserPreferences(
+        mode: AssistantMode.fromKey(m['mode'] as String? ?? 'best_friend'),
+        voiceStyle: m['voice_style'] as String? ?? 'alloy',
+        defaultReminderCadenceMinutes:
+            m['default_reminder_cadence_minutes'] as int? ?? 30,
+        useBYOK: (m['use_byok'] as int?) == 1,
+      );
+}
